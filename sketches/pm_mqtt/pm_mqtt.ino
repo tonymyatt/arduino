@@ -6,7 +6,6 @@
 
 uint8_t mac[] = {0x00, 0x10, 0xFA, 0x6E, 0x38, 0x4A};
 unsigned long lastSentAt = millis();
-double lastValue = 0;
 
 // Energy Monitor for house and solar
 EnergyMonitor emon1;
@@ -15,8 +14,10 @@ EnergyMonitor emon2;
 EthernetClient client;
 HADevice device(mac, sizeof(mac));
 HAMqtt mqtt(client, device);
-HASensor house_current("house_current");
-HASensor solar_current("solar_current");
+HASensor solar_amps("solar_amps");
+HASensor solar_watts("solar_watts");
+HASensor house_amps("house_amps");
+HASensor house_watts("house_watts");
 
 void onBeforeSwitchStateChanged(bool state, HASwitch* s)
 {
@@ -34,20 +35,28 @@ void setup() {
 
     // set device's details (optional)
     device.setName("Power_Monitor");
-    device.setSoftwareVersion("1.0");
+    device.setSoftwareVersion("1.1");
 
-    // House Sensor
-    house_current.setUnitOfMeasurement("A");
-    house_current.setDeviceClass("current");
-    house_current.setIcon("mdi:home");
-    house_current.setName("House Current");
+    // Solar Sensors
+    solar_amps.setUnitOfMeasurement("A");
+    solar_amps.setDeviceClass("current");
+    solar_amps.setIcon("mdi:solar-power");
+    solar_amps.setName("Solar Current");
+    solar_watts.setUnitOfMeasurement("W");
+    solar_watts.setDeviceClass("power");
+    solar_watts.setIcon("mdi:solar-power");
+    solar_watts.setName("Solar Power");
 
-    // Solar Sensor
-    solar_current.setUnitOfMeasurement("A");
-    solar_current.setDeviceClass("current");
-    solar_current.setIcon("mdi:solar-power");
-    solar_current.setName("Solar Current");
-
+    // House Sensors
+    house_amps.setUnitOfMeasurement("A");
+    house_amps.setDeviceClass("current");
+    house_amps.setIcon("mdi:home");
+    house_amps.setName("House Current");
+    house_watts.setUnitOfMeasurement("W");
+    house_watts.setDeviceClass("power");
+    house_watts.setIcon("mdi:home");
+    house_watts.setName("House Power");
+    
     mqtt.begin(BROKER_ADDR);
 
     // Current: input pin & calibration
@@ -66,10 +75,26 @@ void loop() {
     Ethernet.maintain();
     mqtt.loop();
 
+    // Only send about every 5s
     if ((millis() - lastSentAt) >= 5000) {
         lastSentAt = millis();
-        lastValue = lastValue + 0.5;
-        house_current.setValue(Irms1);
-        solar_current.setValue(Irms2);
+
+        /* CTs have an offset of 0.391 (observed) */
+        // For Solar, if under 0.45A, cutoff to zero
+        if(Irms1 < 0.45) {
+          solar_amps.setValue(0);
+          solar_watts.setValue(0);
+        } else {
+          solar_amps.setValue(Irms1 - 0.391);           // Remove 0.391 offset
+          solar_watts.setValue((Irms1 - 0.391)*240);   // Assume power factor of 1.0 and 240VAC
+        }
+        // For Solar, if under 0.45A, cutoff to zero
+        if(Irms2 < 0.45) {
+          house_amps.setValue(0);
+          house_watts.setValue(0);
+        } else {
+          house_amps.setValue(Irms2 - 0.391);           // Remove 0.391 offset
+          house_watts.setValue((Irms2 - 0.391)*0.9*240);   // Assume power factor of 0.9 and 240VAC
+        }
     }
 }
