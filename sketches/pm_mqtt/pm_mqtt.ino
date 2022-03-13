@@ -2,7 +2,7 @@
 #include <ArduinoHA.h>
 #include <EmonLib.h>
 
-#define BROKER_ADDR IPAddress(192,168,1,14)
+#define BROKER_ADDR IPAddress(192,168,1,16)
 
 uint8_t mac[] = {0x00, 0x10, 0xFA, 0x6E, 0x38, 0x4A};
 unsigned long lastSentAt = millis();
@@ -18,12 +18,6 @@ HASensor solar_amps("solar_amps");
 HASensor solar_watts("solar_watts");
 HASensor house_amps("house_amps");
 HASensor house_watts("house_watts");
-
-void onBeforeSwitchStateChanged(bool state, HASwitch* s)
-{
-    // this callback will be called before publishing new state to HA
-    // in some cases there may be delay before onStateChanged is called due to network latency
-}
 
 void setup() {
     Serial.begin(9600);
