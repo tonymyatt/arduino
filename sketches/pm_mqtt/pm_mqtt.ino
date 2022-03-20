@@ -19,6 +19,11 @@ HASensor solar_watts("solar_watts");
 HASensor house_amps("house_amps");
 HASensor house_watts("house_watts");
 
+HASensor import_amps("import_amps");
+HASensor import_watts("import_watts");
+HASensor export_amps("export_amps");
+HASensor export_watts("export_watts");
+
 void setup() {
     Serial.begin(9600);
     // you don't need to verify return status
@@ -50,6 +55,26 @@ void setup() {
     house_watts.setDeviceClass("power");
     house_watts.setIcon("mdi:home");
     house_watts.setName("House Power");
+
+    // Import Calc Sensors
+    import_amps.setUnitOfMeasurement("A");
+    import_amps.setDeviceClass("current");
+    import_amps.setIcon("mdi:home-import-outline");
+    import_amps.setName("Import Current");
+    import_watts.setUnitOfMeasurement("W");
+    import_watts.setDeviceClass("power");
+    import_watts.setIcon("mdi:home-import-outline");
+    import_watts.setName("Import Power");
+
+    // Export Calc Sensors
+    export_amps.setUnitOfMeasurement("A");
+    export_amps.setDeviceClass("current");
+    export_amps.setIcon("mdi:home-export-outline");
+    export_amps.setName("Export Current");
+    export_watts.setUnitOfMeasurement("W");
+    export_watts.setDeviceClass("power");
+    export_watts.setIcon("mdi:home-export-outline");
+    export_watts.setName("Export Power");
     
     mqtt.begin(BROKER_ADDR);
 
@@ -65,6 +90,10 @@ void setup() {
 void loop() {
     double Irms1 = emon1.calcIrms(2000);  // Calculate Irms only
     double Irms2 = emon2.calcIrms(2000);  // Calculate Irms only
+    double solarAmps, solarWatts;
+    double houseAmps, houseWatts;
+    double importAmps, importWatts;
+    double exportAmps, exportWatts;
     
     Ethernet.maintain();
     mqtt.loop();
@@ -75,20 +104,43 @@ void loop() {
 
         /* CTs have an offset of 0.391 (observed) */
         // For Solar, if under 0.45A, cutoff to zero
-        if(Irms1 < 0.45) {
-          solar_amps.setValue(0);
-          solar_watts.setValue(0);
+        if(Irms1 < 0.391) {
+          solarAmps = 0.0;
+          solarWatts = 0.0;
         } else {
-          solar_amps.setValue(Irms1 - 0.391);           // Remove 0.391 offset
-          solar_watts.setValue((Irms1 - 0.391)*240);   // Assume power factor of 1.0 and 240VAC
+          solarAmps = Irms1 - 0.391;      // Remove 0.391 offset
+          solarWatts = (solarAmps*240);   // Assume power factor of 1.0 and 240VAC
         }
-        // For Solar, if under 0.45A, cutoff to zero
+        
+        // For house, if under 0.45A, cutoff to zero
         if(Irms2 < 0.45) {
-          house_amps.setValue(0);
-          house_watts.setValue(0);
+          houseAmps = 0.0;
+          houseWatts = 0.0;
         } else {
-          house_amps.setValue(Irms2 - 0.391);           // Remove 0.391 offset
-          house_watts.setValue((Irms2 - 0.391)*0.9*240);   // Assume power factor of 0.9 and 240VAC
+          houseAmps = Irms2 - 0.391;        // Remove 0.391 offset
+          houseWatts = houseAmps*0.9*240;   // Assume power factor of 0.9 and 240VAC
         }
+
+        // Import is house less what solar is generating, dont allow to go negative
+        importAmps = houseAmps - solarAmps;
+        if(importAmps < 0) importAmps = 0;
+        importWatts = houseWatts - solarWatts;
+        if(importWatts < 0) importWatts = 0;
+
+        // Export is what solar we are generating less house, dont allow to go negative
+        exportAmps = solarAmps - houseAmps;
+        if(exportAmps < 0) exportAmps = 0;
+        exportWatts = solarWatts - houseWatts;
+        if(exportWatts < 0) exportWatts = 0;
+
+        // Update HA Sensors
+        solar_amps.setValue(solarAmps);
+        solar_watts.setValue(solarWatts);
+        house_amps.setValue(houseAmps);
+        house_watts.setValue(houseWatts);
+        import_amps.setValue(importAmps);
+        import_watts.setValue(importWatts);
+        export_amps.setValue(exportAmps);
+        export_watts.setValue(exportWatts);
     }
 }
