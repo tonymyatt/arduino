@@ -2,22 +2,20 @@
 #include <Ethernet.h>
 #include <ArduinoHA.h>
 #include <Dht11.h>
-//#include <OneWire.h>
-//#include <DallasTemperature.h>
+#include <DS18B20.h>
 
 #define BROKER_ADDR IPAddress(192,168,1,16)
 
 uint8_t mac[] = {0x90, 0xA2, 0xDA, 0x00, 0x51, 0x06};
-unsigned long lastSentAt = millis();
+//unsigned long lastSentAt = millis();
 
 // Create a DHT11 sensor object on digital 8
 Dht11 Sen1(8);
 
-// Setup a oneWire instance to communicate with any OneWire devices
-//OneWire oneWire(9);
-
-// Pass our oneWire reference to Dallas Temperature. 
-//DallasTemperature Sen2(&oneWire);
+// DS18B20 temp sensor on digital 9
+DS18B20 ds(9);
+uint8_t address[] = {40,26,94,130,3,0,0,135};
+uint8_t selected;
 
 EthernetClient client;
 HADevice device(mac, sizeof(mac));
@@ -59,8 +57,8 @@ void setup()
   //sensor2_dewp.setDeviceClass("temperature");
   //sensor2_dewp.setName("House Dew Point (Sensor 2)");
 
-  // Start up the DallasTemp lib
-  //Sen2.begin();
+  // Select temp sensor
+  selected = ds.select(address);
 
   mqtt.begin(BROKER_ADDR);
 }
@@ -69,21 +67,22 @@ void loop()
 { 
   // Read sensor data
   Sen1.read();
-  //Sen2.requestTemperatures();
+  double hum = Sen1.getHumidity();
+  double temp = ds.getTempC();
 
   Ethernet.maintain();
   mqtt.loop();
 
   // Only send about every 5s
-  if ((millis() - lastSentAt) >= 5000) {
-      lastSentAt = millis();
+  //if ((millis() - lastSentAt) >= 5000) {
+  //    lastSentAt = millis();
 
-      sensor1_temp.setValue(Sen1.getTemperature());
-      sensor1_humi.setValue(Sen1.getHumidity());
-      sensor1_dewp.setValue(dewPoint(Sen1.getTemperature(), Sen1.getHumidity()));
+      sensor1_temp.setValue(temp);
+      sensor1_humi.setValue(hum);
+      sensor1_dewp.setValue(dewPoint(temp, hum));
       //sensor2_temp.setValue(Sen2.getTempCByIndex(0)); // Two infered decimals
       //sensor2_dewp.setValue(dewPoint(Sen2.getTempCByIndex(0), Sen1.getHumidity()));
-  }
+  //}
 }
 
 // dewPoint function NOAA
@@ -92,18 +91,5 @@ void loop()
 //
 double dewPoint(double celsius, double humidity)
 {
-	// (1) Saturation Vapor Pressure = ESGG(T)
-	double RATIO = 373.15 / (273.15 + celsius);
-	double RHS = -7.90298 * (RATIO - 1);
-	RHS += 5.02808 * log10(RATIO);
-	RHS += -1.3816e-7 * (pow(10, (11.344 * (1 - 1/RATIO ))) - 1) ;
-	RHS += 8.1328e-3 * (pow(10, (-3.49149 * (RATIO - 1))) - 1) ;
-	RHS += log10(1013.246);
-
-        // factor -3 is to adjust units - Vapor Pressure SVP * humidity
-	double VP = pow(10, RHS - 3) * humidity;
-
-        // (2) DEWPOINT = F(Vapor Pressure)
-	double T = log(VP/0.61078);   // temp var
-	return (241.88 * T) / (17.558 - T);
+    return (celsius - (14.55 + 0.114 * celsius) * (1 - (0.01 * humidity)) - pow(((2.5 + 0.007 * celsius) * (1 - (0.01 * humidity))),3) - (15.9 + 0.117 * celsius) * pow((1 - (0.01 * humidity)), 14));
 }
