@@ -7,7 +7,7 @@
 #define BROKER_ADDR IPAddress(192,168,1,16)
 
 uint8_t mac[] = {0x90, 0xA2, 0xDA, 0x00, 0x51, 0x06};
-//unsigned long lastSentAt = millis();
+unsigned long lastSentAt = millis();
 
 // Create a DHT11 sensor object on digital 8
 Dht11 Sen1(8);
@@ -65,24 +65,25 @@ void setup()
 
 void loop()
 { 
-  // Read sensor data
-  Sen1.read();
-  double hum = Sen1.getHumidity();
-  double temp = ds.getTempC();
 
   Ethernet.maintain();
   mqtt.loop();
 
   // Only send about every 5s
-  //if ((millis() - lastSentAt) >= 5000) {
-  //    lastSentAt = millis();
+  if ((millis() - lastSentAt) >= 5000) {
+      lastSentAt = millis();
+
+      // Read sensor data
+      Sen1.read();
+      double hum = Sen1.getHumidity();
+      double temp = ds.getTempC();
 
       sensor1_temp.setValue(temp);
       sensor1_humi.setValue(hum);
       sensor1_dewp.setValue(dewPoint(temp, hum));
       //sensor2_temp.setValue(Sen2.getTempCByIndex(0)); // Two infered decimals
       //sensor2_dewp.setValue(dewPoint(Sen2.getTempCByIndex(0), Sen1.getHumidity()));
-  //}
+  }
 }
 
 // dewPoint function NOAA
