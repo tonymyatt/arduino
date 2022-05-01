@@ -13,7 +13,7 @@ unsigned long lastSentAt = millis();
 Dht11 Sen1(8);
 
 // DS18B20 temp sensor on digital 9
-DS18B20 ds(9);
+DS18B20 Sen2(9);
 uint8_t address[] = {40,26,94,130,3,0,0,135};
 uint8_t selected;
 
@@ -22,9 +22,7 @@ HADevice device(mac, sizeof(mac));
 HAMqtt mqtt(client, device);
 HASensor sensor1_temp("s1t");
 HASensor sensor1_humi("s1h");
-HASensor sensor1_dewp("s1d");
-//HASensor sensor2_temp("s2t");
-//HASensor sensor2_dewp("s2d");
+HASensor sensor2_temp("s2t");
 
 void setup()
 {
@@ -36,61 +34,42 @@ void setup()
 
   // set device's details (optional)
   device.setName("House_IO");
-  device.setSoftwareVersion("1.0");
+  device.setSoftwareVersion("1.1");
 
   // Sensor 1
   sensor1_temp.setUnitOfMeasurement("°C");
   sensor1_temp.setDeviceClass("temperature");
   sensor1_temp.setName("House Temperature");
+  
   sensor1_humi.setUnitOfMeasurement("%");
   sensor1_humi.setDeviceClass("humidity");
   sensor1_humi.setName("House Humidity");
-  sensor1_dewp.setUnitOfMeasurement("°C");
-  sensor1_dewp.setDeviceClass("temperature");
-  sensor1_dewp.setName("House Dew Point");
 
   // Sensor 2
-  //sensor2_temp.setUnitOfMeasurement("°C");
-  //sensor2_temp.setDeviceClass("temperature");
-  //sensor2_temp.setName("House Temperature (Sensor 2)");
-  //sensor2_dewp.setUnitOfMeasurement("°C");
-  //sensor2_dewp.setDeviceClass("temperature");
-  //sensor2_dewp.setName("House Dew Point (Sensor 2)");
+  sensor2_temp.setUnitOfMeasurement("°C");
+  sensor2_temp.setDeviceClass("temperature");
+  sensor2_temp.setName("House Temperature");
 
   // Select temp sensor
-  selected = ds.select(address);
+  selected = Sen2.select(address);
 
   mqtt.begin(BROKER_ADDR);
 }
 
 void loop()
 { 
-
   Ethernet.maintain();
   mqtt.loop();
 
   // Only send about every 5s
   if ((millis() - lastSentAt) >= 5000) {
-      lastSentAt = millis();
+    lastSentAt = millis();
 
-      // Read sensor data
-      Sen1.read();
-      double hum = Sen1.getHumidity();
-      double temp = ds.getTempC();
+    // Read sensor data, sensor 2 read not required
+    Sen1.read();
 
-      sensor1_temp.setValue(temp);
-      sensor1_humi.setValue(hum);
-      sensor1_dewp.setValue(dewPoint(temp, hum));
-      //sensor2_temp.setValue(Sen2.getTempCByIndex(0)); // Two infered decimals
-      //sensor2_dewp.setValue(dewPoint(Sen2.getTempCByIndex(0), Sen1.getHumidity()));
+    sensor1_temp.setValue(Sen1.getTemperature());
+    sensor1_humi.setValue(Sen1.getHumidity());
+    sensor2_temp.setValue(Sen2.getTempC());
   }
-}
-
-// dewPoint function NOAA
-// reference (1) : http://wahiduddin.net/calc/density_algorithms.htm
-// reference (2) : http://www.colorado.edu/geography/weather_station/Geog_site/about.htm
-//
-double dewPoint(double celsius, double humidity)
-{
-    return (celsius - (14.55 + 0.114 * celsius) * (1 - (0.01 * humidity)) - pow(((2.5 + 0.007 * celsius) * (1 - (0.01 * humidity))),3) - (15.9 + 0.117 * celsius) * pow((1 - (0.01 * humidity)), 14));
 }
